@@ -1,174 +1,226 @@
 # BoxBus - Courier Delivery App
 
-A comprehensive mobile application for BoxBus delivery company, built with React Native and Expo.
+A comprehensive mobile application for BoxBus delivery company, built with React Native, Expo, and a Node.js backend. This app provides a complete delivery management system for customers, drivers, and administrators.
 
-## Features
+## 🚀 Current Features
 
 ### Customer Features
-- **User Authentication**: Secure registration and login system
-- **Delivery Creation**: Create new delivery orders with pickup/dropoff addresses
-- **Package Management**: Add multiple packages with weight and dimensions
-- **Price Quotes**: Automatic calculation of delivery costs based on weight, volume, and distance
-- **Order Tracking**: View order history and track current deliveries
-- **Secure Data**: Customer information is stored locally with encryption
+- **User Authentication**: Secure registration and login with JWT tokens
+- **Delivery Creation**: Create new delivery orders with real-time distance calculation
+- **Package Management**: Add multiple packages with weight, dimensions, and special handling
+- **Dynamic Pricing**: Automatic calculation based on weight, distance, and delivery windows
+- **Order Tracking**: Real-time status updates and order history
+- **Loyalty Program**: Tiered discounts based on order history (Bronze, Silver, Gold)
 
 ### Driver Features
-- **Order Management**: View assigned orders and update delivery status
+- **Order Management**: View and accept available orders
 - **Status Updates**: Mark orders as picked up, in transit, or delivered
-- **Proof of Delivery**: Upload photos as proof of successful delivery
-- **Real-time Updates**: Track order progress and customer information
+- **Dashboard**: Comprehensive driver dashboard with order management
+- **Order History**: View completed and cancelled orders
 
-### Business Features
-- **WhatsApp Integration**: Automatic notifications when orders are placed
-- **Order Management**: Comprehensive order tracking system
-- **Driver Assignment**: Manual driver assignment (automation planned for future versions)
+### Admin Features
+- **User Management**: Approve drivers, archive users, manage all accounts
+- **Order Analytics**: View completed orders, revenue tracking, user statistics
+- **Driver Approval**: Review and approve driver applications
+- **Archive System**: Archive problematic users with restore functionality
 
-## Tech Stack
+## 🏗️ Technical Architecture
 
-- **Frontend**: React Native with TypeScript
-- **Navigation**: React Navigation v6
-- **State Management**: React Context API
-- **Storage**: AsyncStorage for local data persistence
-- **UI Framework**: Custom styled components with modern design
-- **Platform**: Expo for cross-platform development
+### Frontend
+- **React Native** with Expo** for cross-platform mobile development
+- **TypeScript** for type safety and better development experience
+- **React Navigation** with role-based drawer navigation
+- **Context API** for state management
+- **AsyncStorage** for token persistence
 
-## Installation & Setup
+### Backend
+- **Node.js/Express** server with RESTful API
+- **MongoDB** with Mongoose for data persistence
+- **JWT Authentication** with bcrypt password hashing
+- **Real-time distance calculation** using Google Maps API
+- **Role-based access control** (Customer, Driver, Admin)
+
+### Key Services
+- **Authentication Service**: User registration, login, profile management
+- **Order Service**: Order creation, status updates, tracking
+- **Distance Service**: Real-time distance and duration calculation
+- **Notification Service**: WhatsApp integration for order notifications
+
+## 📱 User Roles & Navigation
+
+### Customer Flow
+1. **Register/Login** → Create delivery → Track orders → View history
+2. **Screens**: New Delivery, My Orders, Completed Orders, Profile
+
+### Driver Flow
+1. **Register/Login** → Wait for approval → Accept orders → Update status → Complete delivery
+2. **Screens**: Driver Dashboard, My Orders, Completed Orders, Profile
+
+### Admin Flow
+1. **Login** → Manage users → Approve drivers → View analytics → Archive users
+2. **Screens**: Admin Dashboard, Archived Users, Completed Orders, Profile
+
+## 💰 Pricing Engine
+
+The app features a sophisticated pricing algorithm:
+
+### Base Pricing
+- **Base Fee**: $15.00 per delivery (includes insurance)
+- **Distance Fee**: $0.75 per km after 15km
+- **Weight Fee**: $0.25 per lb after 25lbs (with scaling reductions)
+- **Package Fee**: $2.00 per additional package
+- **GST**: 5% on all orders
+
+### Delivery Windows
+- **Next Day**: Standard delivery (1.0x multiplier)
+- **Same Day**: 25% premium (1.25x multiplier)
+- **Rush**: 75% premium (1.75x multiplier)
+
+### Loyalty Program
+- **Bronze**: 0% discount (0+ orders)
+- **Silver**: 10% discount (5+ orders)
+- **Gold**: 15% discount (15+ orders)
+
+## 🔄 Order Status Flow
+
+```
+PENDING → ASSIGNED → PICKED_UP → IN_TRANSIT → DELIVERED
+```
+
+- **PENDING**: Order created, waiting for driver
+- **ASSIGNED**: Driver accepted the order
+- **PICKED_UP**: Driver picked up the package
+- **IN_TRANSIT**: Package being delivered
+- **DELIVERED**: Successfully delivered
+- **CANCELLED**: Order cancelled (before pickup only)
+
+## 🛠️ Development Challenges & Solutions
+
+### Challenge 1: OpenRoute API Integration
+**Problem**: Initially integrated with OpenRoute API for distance calculation, but encountered several issues:
+- Complex API structure with nested response objects
+- Inconsistent response formats
+- Rate limiting and reliability issues
+- Difficult error handling
+
+**Solution**: Switched to Google Maps Distance Matrix API for:
+- Simpler, more reliable responses
+- Better error handling
+- More consistent data format
+- Better documentation and support
+
+### Challenge 2: Data Migration from AsyncStorage to Backend
+**Problem**: Originally built with local storage (AsyncStorage) for data persistence, but this approach had limitations:
+- Data not shared between devices
+- No real-time updates
+- Limited scalability
+- Security concerns with local data
+
+**Solution**: Complete migration to backend storage:
+- **Database**: MongoDB with Mongoose for data modeling
+- **API**: RESTful endpoints for all operations
+- **Authentication**: JWT-based authentication system
+- **Real-time**: Backend handles all data operations
+- **Security**: Server-side validation and authorization
+
+**Migration Impact**:
+- Rebuilt all data services to use API calls instead of local storage
+- Updated all screens to handle async data loading
+- Implemented proper error handling for network requests
+- Added loading states and refresh functionality
+- Ensured data consistency across all user types
+
+## 🚀 Installation & Setup
 
 ### Prerequisites
 - Node.js (v16 or higher)
-- npm or yarn
+- MongoDB (local or cloud instance)
 - Expo CLI
 - Android Studio (for Android development)
 - Xcode (for iOS development, macOS only)
 
-### Setup Steps
+### Backend Setup
+```bash
+cd backend
+npm install
+cp .env.example .env  # Configure your environment variables
+npm run dev  # Start with nodemon for development
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd BoxBusApp
-   ```
+### Frontend Setup
+```bash
+npm install
+npm start  # Start Expo development server
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### Environment Variables
+Create a `.env` file in the backend directory:
+```
+MONGODB_URI=mongodb://localhost:27017/boxbus
+JWT_SECRET=your-secret-key
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+```
 
-3. **Install Expo CLI globally**
-   ```bash
-   npm install -g @expo/cli
-   ```
-
-4. **Start the development server**
-   ```bash
-   npm start
-   ```
-
-5. **Run on device/simulator**
-   - Press `a` for Android
-   - Press `i` for iOS
-   - Scan QR code with Expo Go app on your phone
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 BoxBusApp/
+├── backend/
+│   ├── models/          # MongoDB schemas (User, Order)
+│   ├── routes/          # API endpoints (users, orders, distance)
+│   ├── middleware/       # Authentication middleware
+│   ├── services/        # Business logic (distance calculation)
+│   └── server.js        # Express server setup
 ├── src/
-│   ├── components/          # Reusable UI components
-│   ├── contexts/           # React Context providers
-│   ├── navigation/         # Navigation configuration
-│   ├── screens/            # App screens
-│   ├── services/           # Business logic and API calls
-│   ├── types/              # TypeScript type definitions
-│   └── utils/              # Utility functions
-├── assets/                 # Images, fonts, and other assets
-├── App.tsx                 # Main app component
-└── package.json            # Dependencies and scripts
+│   ├── components/      # Reusable UI components
+│   ├── contexts/        # React Context providers
+│   ├── navigation/      # Navigation configuration
+│   ├── screens/         # App screens
+│   ├── services/        # API services
+│   ├── types/           # TypeScript definitions
+│   └── utils/           # Utility functions
+└── assets/              # Images and static assets
 ```
 
-## Key Components
+## 🔐 Security Features
 
-### Authentication System
-- Secure user registration and login
-- Local storage with AsyncStorage
-- Session management
-- Password validation
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: bcrypt for password security
+- **Role-based Access**: Different permissions for customers, drivers, and admins
+- **Input Validation**: Server-side validation for all user inputs
+- **Archive System**: Ability to archive problematic users
+- **Login Prevention**: Archived users cannot log in
 
-### Order Management
-- Order creation with package details
-- Real-time status updates
-- Order history tracking
-- Driver assignment system
+## 🚀 Deployment
 
-### Pricing Engine
-- Base delivery fee calculation
-- Weight-based surcharges
-- Distance-based surcharges
-- Volume-based adjustments
+### Backend Deployment
+- Deploy to cloud platforms (Heroku, Railway, AWS)
+- Configure MongoDB Atlas for production database
+- Set up environment variables
+- Enable HTTPS for secure API communication
 
-## Security Features
+### Mobile App Deployment
+- **Android**: Build APK with `expo build:android`
+- **iOS**: Build IPA with `expo build:ios`
+- **App Stores**: Submit to Google Play Store and Apple App Store
 
-- **Local Data Storage**: Customer information stored locally on device
-- **Input Validation**: Comprehensive form validation
-- **Secure Authentication**: Protected routes and user sessions
-- **Data Encryption**: Sensitive data encryption (planned for production)
-
-## WhatsApp Integration
-
-The app currently logs WhatsApp notification messages to the console. To implement actual WhatsApp Business API integration:
-
-1. Set up WhatsApp Business API account
-2. Configure webhook endpoints
-3. Replace console.log with actual API calls
-4. Handle message delivery confirmations
-
-## Future Enhancements
+## 🔮 Future Enhancements
 
 ### Phase 2 (Planned)
-- **Driver Automation**: Automatic driver assignment based on location and availability
 - **Real-time GPS Tracking**: Live driver location updates
 - **Push Notifications**: Real-time order status updates
 - **Payment Integration**: Secure payment processing
-- **Analytics Dashboard**: Business insights and reporting
+- **Advanced Analytics**: Business insights and reporting
+- **Driver Automation**: Automatic driver assignment
 
 ### Phase 3 (Planned)
 - **Multi-language Support**: Internationalization
 - **Advanced Routing**: Optimized delivery routes
 - **Customer Reviews**: Rating and feedback system
-- **Loyalty Program**: Customer rewards and incentives
+- **API Rate Limiting**: Enhanced API security
+- **Caching**: Redis for improved performance
 
-## Development Guidelines
-
-### Code Style
-- Use TypeScript for type safety
-- Follow React Native best practices
-- Implement proper error handling
-- Use consistent naming conventions
-
-### Testing
-- Unit tests for services and utilities
-- Integration tests for navigation flows
-- E2E tests for critical user journeys
-
-### Performance
-- Optimize bundle size
-- Implement lazy loading
-- Use proper image optimization
-- Minimize re-renders
-
-## Deployment
-
-### Android
-1. Build APK: `expo build:android`
-2. Test on multiple devices
-3. Upload to Google Play Store
-
-### iOS
-1. Build IPA: `expo build:ios`
-2. Test on multiple devices
-3. Upload to App Store Connect
-
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
 
@@ -176,30 +228,36 @@ The app currently logs WhatsApp notification messages to the console. To impleme
    - Clear cache: `expo start -c`
    - Reset Metro: `expo start --clear`
 
-2. **Navigation issues**
-   - Check navigation dependencies
-   - Verify screen registration
+2. **Backend connection issues**
+   - Check MongoDB connection
+   - Verify environment variables
+   - Check API endpoints
 
-3. **Storage issues**
-   - Clear AsyncStorage data
-   - Check device permissions
+3. **Authentication issues**
+   - Clear AsyncStorage: `AsyncStorage.clear()`
+   - Check JWT token expiration
+   - Verify user permissions
 
-### Support
+## 📊 Current Status
 
-For technical support or questions:
-- Check the Expo documentation
-- Review React Native troubleshooting guides
-- Contact the development team
+- ✅ **Authentication System**: Complete with role-based access
+- ✅ **Order Management**: Full lifecycle from creation to delivery
+- ✅ **User Management**: Admin controls with archive/restore functionality
+- ✅ **Pricing Engine**: Sophisticated algorithm with loyalty program
+- ✅ **Distance Calculation**: Google Maps API integration
+- ✅ **Data Migration**: Successfully moved from AsyncStorage to backend
+- ✅ **Archive System**: Users can be archived and prevented from logging in
 
-## License
+## 🤝 Contributing
+
+This is a private project for BoxBus delivery company. For development questions or contributions, contact the development team.
+
+## 📄 License
 
 This project is proprietary software owned by BoxBus delivery company.
-
-## Contributing
-
-This is a private project. Please contact the development team for contribution guidelines.
 
 ---
 
 **BoxBus App** - Fast & Reliable Delivery Solutions
 
+*Built with ❤️ using React Native, Node.js, and MongoDB*

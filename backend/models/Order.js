@@ -8,7 +8,8 @@ const orderSchema = new mongoose.Schema({
   },
   driver: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: 'User',
+    required: false
   },
   pickupAddress: {
     street: { type: String, required: true },
@@ -62,11 +63,6 @@ const orderSchema = new mongoose.Schema({
   estimatedDelivery: Date,
   actualDelivery: Date,
   
-  status: {
-    type: String,
-    enum: ['pending', 'confirmed', 'assigned', 'picked-up', 'in-transit', 'delivered', 'cancelled'],
-    default: 'pending'
-  },
   priority: {
     type: String,
     enum: ['low', 'normal', 'high', 'urgent'],
@@ -85,13 +81,6 @@ const orderSchema = new mongoose.Schema({
     total: { type: Number, required: true }
   },
   
-  // Driver compensation
-  driverCompensation: {
-    commissionRate: { type: Number, default: 60 }, // percentage
-    commissionAmount: { type: Number, default: 0 },
-    tips: { type: Number, default: 0 },
-    totalEarnings: { type: Number, default: 0 }
-  },
   
   // Insurance (built into pricing, no separate fee)
   insurance: {
@@ -107,13 +96,19 @@ const orderSchema = new mongoose.Schema({
   trackingNumber: {
     type: String,
     unique: true,
-    required: true
+    required: false
   },
   
   // Special instructions and notes
   specialInstructions: String,
   customerNotes: String,
-  driverNotes: String,
+  
+  // Order status
+  status: {
+    type: String,
+    enum: ['PENDING', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'],
+    default: 'PENDING'
+  },
   
   // Timestamps
   createdAt: {
@@ -197,9 +192,6 @@ orderSchema.methods.calculatePrice = function() {
   // Calculate total
   const total = subtotal + gst;
   
-  // Calculate driver compensation
-  const commissionAmount = subtotal * (this.driverCompensation.commissionRate / 100);
-  const totalEarnings = commissionAmount + this.driverCompensation.tips;
   
   // Update the price object
   this.price = {
@@ -213,9 +205,6 @@ orderSchema.methods.calculatePrice = function() {
     total: Math.round(total * 100) / 100
   };
   
-  // Update driver compensation
-  this.driverCompensation.commissionAmount = Math.round(commissionAmount * 100) / 100;
-  this.driverCompensation.totalEarnings = Math.round(totalEarnings * 100) / 100;
   
   return this.price;
 };

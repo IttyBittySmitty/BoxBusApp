@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { Alert } from 'react-native';
 import { User, AuthState } from '../types';
 import authService from '../services/authService';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  register: (userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
 }
@@ -37,29 +38,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      // TEMPORARY: Auto-login for development/testing
-      // Remove this when you want to implement real authentication
-      const demoUser: User = {
-        id: 'demo-user-123',
-        email: 'demo@boxbus.com',
-        firstName: 'Demo',
-        lastName: 'User',
-        phone: '+1 (555) 123-4567',
-        address: '123 Demo Street, Demo City, DC 12345',
-        userType: 'customer',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      setAuthState({
-        user: demoUser,
-        isAuthenticated: true,
-        isLoading: false,
-        error: null,
-      });
-      
-      // Uncomment the code below when you want real authentication:
-      /*
       const user = await authService.getCurrentUser();
       setAuthState({
         user,
@@ -67,7 +45,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         isLoading: false,
         error: null,
       });
-      */
     } catch (error) {
       setAuthState({
         user: null,
@@ -82,6 +59,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
       const user = await authService.login(email, password);
+      
+      // Check if driver is approved
+      if (user.userType === 'driver' && !user.isApproved) {
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: 'Your driver account is pending approval. Please wait for admin approval.',
+        }));
+        return;
+      }
+      
       setAuthState({
         user,
         isAuthenticated: true,
@@ -98,10 +86,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const register = async (userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>, password: string) => {
     try {
       setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
-      const user = await authService.register(userData);
+      const user = await authService.register(userData, password);
+      
+      // Check if driver is approved
+      if (user.userType === 'driver' && !user.isApproved) {
+        setAuthState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: null,
+        }));
+        // Simple success - no alert that might interfere with scrolling
+        return;
+      }
+      
+      // Show success message for customer registration
+      Alert.alert(
+        'Registration Successful',
+        'Account created successfully! You are now logged in.',
+        [{ text: 'OK' }]
+      );
+      
       setAuthState({
         user,
         isAuthenticated: true,
@@ -120,15 +127,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('AuthContext: Starting logout process...');
       setAuthState(prev => ({ ...prev, isLoading: true }));
       await authService.logout();
+      console.log('AuthContext: AuthService logout completed');
       setAuthState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         error: null,
       });
+      console.log('AuthContext: Auth state updated - user logged out');
     } catch (error) {
+      console.error('AuthContext: Logout error:', error);
       setAuthState(prev => ({
         ...prev,
         isLoading: false,

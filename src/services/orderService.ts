@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Order, Package, DeliveryQuote, OrderStatus } from '../types';
 import { BUSINESS_RULES, TIME_UTILS } from '../constants/businessRules';
 
-const ORDERS_KEY = 'boxbus_orders';
+const API_BASE_URL = 'http://localhost:5000';
+// ORDERS_KEY removed - all data now comes from backend
 
 class OrderService {
   private static instance: OrderService;
@@ -16,248 +17,337 @@ class OrderService {
     return OrderService.instance;
   }
 
-  private async getOrders(): Promise<Order[]> {
+  // Local storage methods removed - all data now comes from backend
+
+
+  public async createOrder(orderData: Partial<Order>): Promise<Order> {
+    console.log('🔍 ORDER SERVICE RECEIVED:');
+    console.log('Price data:', orderData.price);
+    
+    if (!orderData.customerId) {
+      throw new Error('Customer ID is required to create an order');
+    }
+
     try {
-      const ordersJson = await AsyncStorage.getItem(ORDERS_KEY);
-      return ordersJson ? JSON.parse(ordersJson) : [];
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(orderData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create order');
+      }
+
+      const newOrder = await response.json();
+      console.log('✅ Order created successfully in backend');
+      return newOrder;
     } catch (error) {
-      console.error('Error getting orders:', error);
+      console.error('Error creating order:', error);
+      throw error;
+    }
+  }
+
+  public async getOrdersByCustomer(customerId: string): Promise<Order[]> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/my-orders`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch customer orders');
+      }
+
+      const orders = await response.json();
+      console.log('📦 Retrieved customer orders from backend:', orders.length);
+      return orders;
+    } catch (error) {
+      console.error('Error fetching customer orders:', error);
       return [];
     }
   }
 
-  private async saveOrders(orders: Order[]): Promise<void> {
-    try {
-      await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-    } catch (error) {
-      console.error('Error saving orders:', error);
-    }
-  }
-
-  public async createDemoOrders(): Promise<void> {
-    const demoOrders: Order[] = [
-      {
-        id: 'order1',
-        customerId: 'demo-customer-1',
-        pickupAddress: '123 Main St, Downtown, DC 20001',
-        dropoffAddress: '456 Oak Ave, Suburbia, DC 20002',
-        packages: [
-          {
-            id: 'pkg1',
-            weight: 25,
-            length: 20,
-            width: 15,
-            height: 10,
-            description: 'Small package',
-            fragile: false,
-          }
-        ],
-        totalWeight: 25,
-        totalVolume: 3000,
-        distance: 25,
-        deliveryWindow: 'next-day',
-        deliveryCutoff: TIME_UTILS.getDeliveryCutoff('next-day'),
-        status: OrderStatus.PENDING,
-        priority: 'normal',
-        price: {
-          basePrice: 15.00,
-          distanceFee: 7.50,
-          weightFee: 0,
-          packageFee: 0,
-          deliveryWindowMultiplier: 1.0,
-          subtotal: 22.50,
-          gst: 1.13,
-          total: 23.63
-        },
-        driverCompensation: {
-          commissionRate: 60,
-          commissionAmount: 13.50,
-          tips: 0,
-          totalEarnings: 13.50
-        },
-        insurance: {
-          isInsured: true,
-          coverageAmount: 1000
-        },
-        paymentStatus: 'pending',
-        trackingNumber: 'BB12345678',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        id: 'order2',
-        customerId: 'demo-customer-2',
-        pickupAddress: '789 Business Blvd, Industrial Park, DC 20003',
-        dropoffAddress: '321 Commerce St, Retail District, DC 20004',
-        packages: [
-          {
-            id: 'pkg2',
-            weight: 50,
-            length: 30,
-            width: 25,
-            height: 20,
-            description: 'Medium package',
-            fragile: true,
-          }
-        ],
-        totalWeight: 50,
-        totalVolume: 15000,
-        distance: 50,
-        deliveryWindow: 'same-day',
-        deliveryCutoff: TIME_UTILS.getDeliveryCutoff('same-day'),
-        status: OrderStatus.PENDING,
-        priority: 'normal',
-        price: {
-          basePrice: 15.00,
-          distanceFee: 26.25,
-          weightFee: 6.25,
-          packageFee: 0,
-          deliveryWindowMultiplier: 1.25,
-          subtotal: 59.38,
-          gst: 2.97,
-          total: 62.35
-        },
-        driverCompensation: {
-          commissionRate: 60,
-          commissionAmount: 35.63,
-          tips: 0,
-          totalEarnings: 35.63
-        },
-        insurance: {
-          isInsured: true,
-          coverageAmount: 1000
-        },
-        paymentStatus: 'pending',
-        trackingNumber: 'BB87654321',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    ];
-
-    await this.saveOrders(demoOrders);
-  }
-
-  public async createOrder(orderData: Partial<Order>): Promise<Order> {
-    const orders = await this.getOrders();
-    const newOrder: Order = {
-      id: `order${Date.now()}`,
-      customerId: orderData.customerId || 'demo-customer',
-      pickupAddress: orderData.pickupAddress || '',
-      dropoffAddress: orderData.dropoffAddress || '',
-      packages: orderData.packages || [],
-      totalWeight: orderData.totalWeight || 0,
-      totalVolume: orderData.totalVolume || 0,
-      distance: orderData.distance || 0,
-      deliveryWindow: orderData.deliveryWindow || 'next-day',
-      deliveryCutoff: orderData.deliveryCutoff || TIME_UTILS.getDeliveryCutoff('next-day'),
-      status: OrderStatus.PENDING,
-      priority: 'normal',
-      price: {
-        basePrice: 15.00,
-        distanceFee: 0,
-        weightFee: 0,
-        packageFee: 0,
-        deliveryWindowMultiplier: 1.0,
-        subtotal: 15.00,
-        gst: 0.75,
-        total: 15.75
-      },
-      driverCompensation: {
-        commissionRate: 60,
-        commissionAmount: 9.00,
-        tips: 0,
-        totalEarnings: 9.00
-      },
-      insurance: {
-        isInsured: true,
-        coverageAmount: 1000
-      },
-      paymentStatus: 'pending',
-      trackingNumber: `BB${Date.now().toString().slice(-8)}`,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    orders.push(newOrder);
-    await this.saveOrders(orders);
-    return newOrder;
-  }
-
-  public async getOrdersByCustomer(customerId: string): Promise<Order[]> {
-    const orders = await this.getOrders();
-    return orders.filter(order => order.customerId === customerId);
-  }
-
   public async getOrderById(orderId: string): Promise<Order | null> {
-    const orders = await this.getOrders();
-    return orders.find(order => order.id === orderId) || null;
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error('Failed to fetch order');
+      }
+
+      const order = await response.json();
+      return order;
+    } catch (error) {
+      console.error('Error fetching order:', error);
+      return null;
+    }
   }
 
-  public async updateOrderStatus(orderId: string, status: OrderStatus, driverId?: string): Promise<Order | null> {
-    const orders = await this.getOrders();
-    const orderIndex = orders.findIndex(order => order.id === orderId);
-    
-    if (orderIndex === -1) return null;
-    
-    orders[orderIndex].status = status;
-    orders[orderIndex].updatedAt = new Date();
-    
-    // Update timing fields based on status
-    if (status === OrderStatus.PICKED_UP) {
-      orders[orderIndex].pickupTime = new Date();
-    } else if (status === OrderStatus.DELIVERED) {
-      orders[orderIndex].deliveryTime = new Date();
+  public async updateOrderStatus(orderId: string, status: OrderStatus): Promise<Order | null> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update order status');
+      }
+
+      const updatedOrder = await response.json();
+      console.log('📦 OrderService: Order status updated successfully in backend');
+      return updatedOrder;
+    } catch (error) {
+      console.error('📦 OrderService: Error updating order status:', error);
+      throw error;
     }
-    
-    await this.saveOrders(orders);
-    return orders[orderIndex];
   }
 
   public async assignDriver(orderId: string, driverId: string): Promise<Order | null> {
-    const orders = await this.getOrders();
-    const orderIndex = orders.findIndex(order => order.id === orderId);
+    console.log('📦 OrderService: assignDriver called with orderId:', orderId, 'driverId:', driverId);
     
-    if (orderIndex === -1) return null;
-    
-    orders[orderIndex].driverId = driverId;
-    orders[orderIndex].status = OrderStatus.ASSIGNED;
-    orders[orderIndex].updatedAt = new Date();
-    
-    await this.saveOrders(orders);
-    return orders[orderIndex];
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/assign`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ driverId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to assign driver');
+      }
+
+      const updatedOrder = await response.json();
+      console.log('📦 OrderService: Driver assigned successfully in backend');
+      return updatedOrder;
+    } catch (error) {
+      console.error('📦 OrderService: Error assigning driver:', error);
+      throw error;
+    }
+  }
+
+  public async updateOrder(order: Order): Promise<Order | null> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/${order.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(order),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update order');
+      }
+
+      const updatedOrder = await response.json();
+      console.log('📦 OrderService: Order updated successfully in backend');
+      return updatedOrder;
+    } catch (error) {
+      console.error('📦 OrderService: Error updating order:', error);
+      throw error;
+    }
+  }
+
+  public async cancelOrder(orderId: string): Promise<Order | null> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/cancel`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to cancel order');
+      }
+
+      const cancelledOrder = await response.json();
+      console.log('Order cancelled successfully in backend:', orderId);
+      return cancelledOrder;
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      throw error;
+    }
   }
 
   public async getAvailableOrders(): Promise<Order[]> {
-    const orders = await this.getOrders();
-    return orders.filter(order => order.status === OrderStatus.PENDING);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/available`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('Available orders API error:', errorData);
+        throw new Error(errorData.message || 'Failed to fetch available orders');
+      }
+
+      const orders = await response.json();
+    console.log('📦 Retrieved available orders from backend:', orders.length);
+    console.log('📦 Available orders details:', orders.map((o: any) => ({ id: o.id?.slice(-8), status: o.status, driver: o.driver })));
+    return orders;
+    } catch (error) {
+      console.error('Error fetching available orders:', error);
+      return [];
+    }
   }
 
-  public async acceptOrder(orderId: string, driverId: string): Promise<Order | null> {
-    return this.assignDriver(orderId, driverId);
+  public async getDriverOrders(): Promise<Order[]> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/driver-orders`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('Driver orders API error:', errorData);
+        throw new Error(errorData.message || 'Failed to fetch driver orders');
+      }
+
+      const orders = await response.json();
+      console.log('📦 Retrieved driver orders from backend:', orders.length);
+      return orders;
+    } catch (error) {
+      console.error('Error fetching driver orders:', error);
+      return [];
+    }
   }
 
-  public async getOrderWithDriverInfo(orderId: string): Promise<Order | null> {
-    return this.getOrderById(orderId);
+  public async getDriverCompletedOrders(): Promise<Order[]> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/driver-completed`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('Driver completed orders API error:', errorData);
+        throw new Error(errorData.message || 'Failed to fetch driver completed orders');
+      }
+
+      const orders = await response.json();
+      console.log('📦 Retrieved driver completed orders from backend:', orders.length);
+      return orders;
+    } catch (error) {
+      console.error('Error fetching driver completed orders:', error);
+      return [];
+    }
   }
 
-  public async getOrdersByDriver(driverId: string): Promise<Order[]> {
-    const orders = await this.getOrders();
-    return orders.filter(order => order.driverId === driverId);
+  public async getCustomerOrders(): Promise<Order[]> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/my-orders`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('Customer orders API error:', errorData);
+        throw new Error(errorData.message || 'Failed to fetch customer orders');
+      }
+
+      const orders = await response.json();
+      console.log('📦 Retrieved customer orders from backend:', orders.length);
+      return orders;
+    } catch (error) {
+      console.error('Error fetching customer orders:', error);
+      return [];
+    }
   }
 
-  public async refreshDemoOrders(): Promise<void> {
-    await this.createDemoOrders();
-  }
+
 
   public async getAllOrders(): Promise<Order[]> {
-    return this.getOrders();
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch orders');
+      }
+
+      const orders = await response.json();
+      return orders;
+    } catch (error) {
+      console.error('Error fetching orders from backend:', error);
+      throw error;
+    }
   }
+
+  // Local storage methods removed - all data now comes from backend
+
+
 
   public async calculateDeliveryQuote(
     packages: Package[], 
     distance: number, 
     deliveryWindow: 'next-day' | 'same-day' | 'rush' = 'next-day',
-    customerId?: string
+    customerId?: string,
+    duration?: string
   ): Promise<DeliveryQuote> {
     // Base pricing logic using business rules
     const basePrice = BUSINESS_RULES.BASE_DELIVERY_FEE;
@@ -354,6 +444,7 @@ class OrderService {
       totalPrice: Math.round(totalPrice * 100) / 100,
       estimatedDeliveryTime,
       distance,
+      duration: duration || 'Calculating...',
       totalWeight,
       numberOfPackages: packages.length
     };
@@ -361,12 +452,21 @@ class OrderService {
 
   private async calculateLoyaltyDiscount(customerId: string, subtotal: number): Promise<{discount: number, percent: number}> {
     try {
-      // Get customer's order history
-      const orders = await this.getOrders();
-      const customerOrders = orders.filter(order => 
-        order.customerId === customerId && 
-        order.status === 'delivered'
-      );
+      // Get customer's order history from backend
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/orders/customer/${customerId}/completed`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch customer order history');
+      }
+
+      const customerOrders = await response.json();
       
       const totalOrders = customerOrders.length;
       
@@ -390,6 +490,7 @@ class OrderService {
       return { discount: 0, percent: 0 };
     }
   }
+
 }
 
 export default OrderService.getInstance();

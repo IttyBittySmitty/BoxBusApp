@@ -2,111 +2,364 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  TouchableOpacity,
   StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
   Alert,
-  Modal,
-  TextInput,
+  Platform,
 } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { Order, User, OrderStatus } from '../types';
 import orderService from '../services/orderService';
-import { Order, OrderStatus, User } from '../types';
+import authService from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function AdminDashboardScreen() {
+const AdminDashboardScreen: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [isOrderModalVisible, setIsOrderModalVisible] = useState(false);
-  const [isUserModalVisible, setIsUserModalVisible] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'orders' | 'users' | 'analytics'>('orders');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [userSortBy, setUserSortBy] = useState<'all' | 'customers' | 'drivers'>('all');
 
   useEffect(() => {
-    loadOrders();
+    loadData();
   }, []);
 
-  const loadOrders = async () => {
+  const loadData = async () => {
     try {
-      // Placeholder: In production, this would fetch from your backend
-      const allOrders = await orderService.getAllOrders();
-      setOrders(allOrders);
+      // Load all orders
+      const allOrdersData = await orderService.getAllOrders();
+      console.log('🔍 AdminDashboard: All orders fetched:', allOrdersData.length, 'orders');
+      console.log('🔍 AdminDashboard: Order statuses:', allOrdersData.map(o => ({ id: o.id?.slice(-8), status: o.status, driver: o.driver })));
+      setAllOrders(allOrdersData);
+      
+      // Filter to show only active orders (not completed or cancelled)
+      const activeOrders = allOrdersData.filter(order => 
+        order.status !== 'DELIVERED' && 
+        order.status !== 'CANCELLED'
+      );
+      
+      console.log('🔍 AdminDashboard: Active orders:', activeOrders.length, 'orders');
+      console.log('🔍 AdminDashboard: Active order details:', activeOrders.map(o => ({ id: o.id?.slice(-8), status: o.status, driver: o.driver })));
+      setOrders(activeOrders);
+
+      // Load real users from authService (exclude archived users and admin users)
+      const allUsers = await authService.getAllUsers();
+      const activeUsers = allUsers.filter(user => 
+        !user.isArchived && 
+        user.userType !== 'admin' // Hide admin users from management
+      );
+      setUsers(activeUsers);
     } catch (error) {
-      console.error('Error loading orders:', error);
+      console.error('Error loading admin data:', error);
     }
   };
 
-  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
-    try {
-      await orderService.updateOrderStatus(orderId, newStatus);
-      await loadOrders(); // Refresh the list
-      Alert.alert('Success', 'Order status updated successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update order status');
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return '#ffa726';
+      case 'ASSIGNED':
+        return '#42a5f5';
+      case 'PICKED_UP':
+        return '#26a69a';
+      case 'IN_TRANSIT':
+        return '#ff7043';
+      case 'DELIVERED':
+        return '#66bb6a';
+      case 'CANCELLED':
+        return '#ef5350';
+      default:
+        return '#9e9e9e';
     }
   };
 
-  const reassignOrder = async (orderId: string, newDriverId: string) => {
-    try {
-      await orderService.assignDriver(orderId, newDriverId);
-      await loadOrders();
-      Alert.alert('Success', 'Order reassigned successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to reassign order');
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return 'Pending';
+      case 'ASSIGNED':
+        return 'Assigned';
+      case 'PICKED_UP':
+        return 'Picked Up';
+      case 'IN_TRANSIT':
+        return 'In Transit';
+      case 'DELIVERED':
+        return 'Delivered';
+      case 'CANCELLED':
+        return 'Cancelled';
+      default:
+        return 'Unknown';
     }
   };
 
-  const deleteOrder = async (orderId: string) => {
-    Alert.alert(
-      'Confirm Deletion',
-      'Are you sure you want to delete this order? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Placeholder: In production, this would call your backend
-              const updatedOrders = orders.filter(order => order.id !== orderId);
-              setOrders(updatedOrders);
-              Alert.alert('Success', 'Order deleted successfully');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete order');
-            }
+  const renderOrderItem = ({ item }: { item: Order }) => (
+    <View style={styles.itemCard}>
+      <View style={styles.itemHeader}>
+        <Text style={styles.itemId}>Order #{(item.id || item._id || '').slice(-8)}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.itemDetails}>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Customer:</Text> {item.customerId}
+        </Text>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Driver:</Text> {item.driverId || 'Unassigned'}
+        </Text>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>From:</Text> {
+            typeof item.pickupAddress === 'string' 
+              ? item.pickupAddress 
+              : `${item.pickupAddress?.street || ''}, ${item.pickupAddress?.city || ''}, ${item.pickupAddress?.state || ''} ${item.pickupAddress?.zipCode || ''}`
+          }
+        </Text>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>To:</Text> {
+            typeof item.deliveryAddress === 'string' 
+              ? item.deliveryAddress 
+              : `${item.deliveryAddress?.street || ''}, ${item.deliveryAddress?.city || ''}, ${item.deliveryAddress?.state || ''} ${item.deliveryAddress?.zipCode || ''}`
+          }
+        </Text>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Price:</Text> ${item.price.total.toFixed(2)}
+        </Text>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Created:</Text> {formatDate(item.createdAt)}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const handleApproveDriver = async (userId: string) => {
+    console.log('Approve Driver button clicked for user:', userId);
+    try {
+      console.log('Calling authService.approveDriver...');
+      await authService.approveDriver(userId);
+      console.log('Driver approved successfully');
+      Alert.alert('Success', 'Driver has been approved');
+      loadData(); // Refresh the data
+    } catch (error) {
+      console.error('Error approving driver:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to approve driver');
+    }
+  };
+
+
+  const handleArchiveUser = async (userId: string, userEmail: string) => {
+    console.log('🔍 ARCHIVE: Button clicked for user:', userId, 'email:', userEmail);
+    
+    // Use platform-appropriate confirmation
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`Are you sure you want to archive ${userEmail}? They will be moved to archived users.`);
+      if (confirmed) {
+        await performArchive(userId);
+      } else {
+        console.log('🔍 ARCHIVE: User cancelled archive');
+      }
+    } else {
+      // Use React Native Alert for mobile
+      Alert.alert(
+        'Archive User',
+        `Are you sure you want to archive ${userEmail}? They will be moved to archived users.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => console.log('🔍 ARCHIVE: User cancelled archive')
           },
-        },
-      ]
+          {
+            text: 'Archive',
+            style: 'destructive',
+            onPress: () => performArchive(userId),
+          },
+        ]
+      );
+    }
+  };
+
+  const performArchive = async (userId: string) => {
+    console.log('🔍 ARCHIVE: User confirmed archive, calling authService.archiveUser...');
+    try {
+      const result = await authService.archiveUser(userId);
+      console.log('🔍 ARCHIVE: authService.archiveUser result:', result);
+      
+      if (Platform.OS === 'web') {
+        alert('Success: User has been archived');
+      } else {
+        Alert.alert('Success', 'User has been archived');
+      }
+      
+      loadData(); // Refresh the data
+    } catch (error) {
+      console.log('🔍 ARCHIVE: Error occurred:', error);
+      
+      if (Platform.OS === 'web') {
+        alert('Error: ' + (error instanceof Error ? error.message : 'Failed to archive user'));
+      } else {
+        Alert.alert('Error', error instanceof Error ? error.message : 'Failed to archive user');
+      }
+    }
+  };
+
+  const getFilteredUsers = () => {
+    console.log('Current userSortBy:', userSortBy);
+    console.log('Total users:', users.length);
+    console.log('All users:', users.map(u => ({ name: u.firstName + ' ' + u.lastName, type: u.userType, isApproved: u.isApproved })));
+    
+    if (userSortBy === 'customers') {
+      const filtered = users.filter(u => u.userType === 'customer');
+      console.log('Filtered customers:', filtered.length);
+      return filtered;
+    } else if (userSortBy === 'drivers') {
+      const filtered = users.filter(u => u.userType === 'driver');
+      console.log('Filtered drivers:', filtered.length);
+      return filtered;
+    }
+    console.log('Showing all users:', users.length);
+    return users; // Show all users (customers and drivers)
+  };
+
+  const renderUserItem = ({ item }: { item: User }) => (
+    <View style={styles.itemCard}>
+      <View style={styles.itemHeader}>
+        <Text style={styles.itemId}>{item.firstName} {item.lastName}</Text>
+        <View style={[styles.userTypeBadge, { backgroundColor: item.userType === 'driver' ? '#42a5f5' : '#66bb6a' }]}>
+          <Text style={styles.userTypeText}>{item.userType.toUpperCase()}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.itemDetails}>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Email:</Text> {item.email}
+        </Text>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Phone:</Text> {item.phone}
+        </Text>
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Address:</Text> {item.address}
+        </Text>
+        {item.userType === 'driver' && (
+          <View style={styles.statusRow}>
+            <Text style={styles.detailLabel}>Status:</Text>
+            <View style={[styles.statusBadge, { 
+              backgroundColor: item.isApproved ? '#66bb6a' : '#ffa726',
+              marginLeft: 8
+            }]}>
+              <Text style={styles.statusText}>
+                {item.isApproved ? 'APPROVED' : 'PENDING'}
+              </Text>
+            </View>
+          </View>
+        )}
+        <Text style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Joined:</Text> {formatDate(item.createdAt)}
+        </Text>
+      </View>
+
+      {/* Driver Approval Button */}
+      {item.userType === 'driver' && !item.isApproved && (
+        <View style={styles.approvalButtons}>
+          <TouchableOpacity
+            style={styles.approveButton}
+            onPress={() => handleApproveDriver(item.id)}
+          >
+            <Text style={styles.approveButtonText}>✓ Approve Driver</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Archive User Button (for all users) */}
+      <View style={styles.deleteButtonContainer}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => handleArchiveUser(item.id, item.email)}
+        >
+          <Text style={styles.deleteButtonText}>🗃️ Archive User</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderAnalytics = () => {
+    // Analytics based on completed orders (archive data)
+    const completedOrders = allOrders.filter(o => o.status === 'DELIVERED');
+    const cancelledOrders = allOrders.filter(o => o.status === 'CANCELLED');
+    const totalCompleted = completedOrders.length;
+    const totalCancelled = cancelledOrders.length;
+    const totalRevenue = completedOrders.reduce((sum, o) => sum + o.price.total, 0);
+    const totalCustomers = users.filter(u => u.userType === 'customer').length;
+    const totalDrivers = users.filter(u => u.userType === 'driver').length;
+
+    return (
+      <View style={styles.analyticsContainer}>
+        <View style={styles.analyticsGrid}>
+          <View style={styles.analyticsCard}>
+            <Text style={styles.analyticsNumber}>{totalCompleted}</Text>
+            <Text style={styles.analyticsLabel}>Completed</Text>
+          </View>
+          <View style={styles.analyticsCard}>
+            <Text style={styles.analyticsNumber}>{totalCancelled}</Text>
+            <Text style={styles.analyticsLabel}>Cancelled</Text>
+          </View>
+          <View style={styles.analyticsCard}>
+            <Text style={styles.analyticsNumber}>{orders.length}</Text>
+            <Text style={styles.analyticsLabel}>Active Orders</Text>
+          </View>
+          <View style={styles.analyticsCard}>
+            <Text style={styles.analyticsNumber}>${totalRevenue.toFixed(2)}</Text>
+            <Text style={styles.analyticsLabel}>Total Revenue</Text>
+          </View>
+        </View>
+      </View>
     );
   };
 
-  const filteredOrders = orders.filter(order =>
-    order.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.pickupAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.dropoffAddress.toLowerCase().includes(searchTerm.toLowerCase())
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyStateIcon}>
+        {activeTab === 'orders' ? '📦' : activeTab === 'users' ? '👥' : '📊'}
+      </Text>
+      <Text style={styles.emptyStateTitle}>
+        {activeTab === 'orders' ? 'No Orders' : activeTab === 'users' ? 'No Users' : 'No Analytics'}
+      </Text>
+      <Text style={styles.emptyStateText}>
+        {activeTab === 'orders' 
+          ? 'No orders found in the system.'
+          : activeTab === 'users'
+          ? 'No users found in the system.'
+          : 'No analytics data available.'
+        }
+      </Text>
+    </View>
   );
 
-  const getStatusColor = (status: OrderStatus) => {
-    switch (status) {
-      case 'pending': return '#ffc107';
-      case 'confirmed': return '#17a2b8';
-      case 'assigned': return '#007bff';
-      case 'picked-up': return '#fd7e14';
-      case 'in-transit': return '#6f42c1';
-      case 'delivered': return '#28a745';
-      case 'cancelled': return '#dc3545';
-      default: return '#6c757d';
-    }
-  };
-
-  const getStatusLabel = (status: OrderStatus) => {
-    return status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ');
-  };
-
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <View style={styles.header}>
       <Text style={styles.title}>Admin Dashboard</Text>
+        <Text style={styles.subtitle}>System Management</Text>
+      </View>
       
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
@@ -115,7 +368,7 @@ export default function AdminDashboardScreen() {
           onPress={() => setActiveTab('orders')}
         >
           <Text style={[styles.tabText, activeTab === 'orders' && styles.activeTabText]}>
-            📦 Orders
+            📦 Orders ({orders.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -123,7 +376,7 @@ export default function AdminDashboardScreen() {
           onPress={() => setActiveTab('users')}
         >
           <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
-            👥 Users
+            👥 Users ({users.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -136,217 +389,98 @@ export default function AdminDashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {activeTab === 'orders' && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Order Management</Text>
-            <TouchableOpacity style={styles.refreshButton} onPress={loadOrders}>
-              <Text style={styles.refreshButtonText}>🔄 Refresh</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Search */}
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search orders by tracking number or address..."
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-          />
-
-          {/* Orders List */}
-          {filteredOrders.map((order) => (
-            <View key={order.id} style={styles.orderCard}>
-              <View style={styles.orderHeader}>
-                <Text style={styles.trackingNumber}>📦 {order.trackingNumber}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                  <Text style={styles.statusText}>{getStatusLabel(order.status)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.orderDetails}>
-                <Text style={styles.addressText}>
-                  📍 <Text style={styles.label}>From:</Text> {order.pickupAddress}
+      {activeTab === 'analytics' ? (
+        renderAnalytics()
+      ) : activeTab === 'orders' ? (
+        <FlatList
+          data={orders}
+          renderItem={renderOrderItem}
+          keyExtractor={(item) => item.id || item._id || Math.random().toString()}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          ListEmptyComponent={renderEmptyState}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <View style={styles.usersContainer}>
+          {/* User Sorting Controls */}
+          <View style={styles.sortContainer}>
+            <Text style={styles.sortTitle}>Filter Users:</Text>
+            <View style={styles.sortButtons}>
+              <TouchableOpacity
+                style={[styles.sortButton, userSortBy === 'all' && styles.activeSortButton]}
+                onPress={() => setUserSortBy('all')}
+              >
+                <Text style={[styles.sortButtonText, userSortBy === 'all' && styles.activeSortButtonText]}>
+                  All ({users.length})
                 </Text>
-                <Text style={styles.addressText}>
-                  🎯 <Text style={styles.label}>To:</Text> {order.dropoffAddress}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sortButton, userSortBy === 'customers' && styles.activeSortButton]}
+                onPress={() => setUserSortBy('customers')}
+              >
+                <Text style={[styles.sortButtonText, userSortBy === 'customers' && styles.activeSortButtonText]}>
+                  Customers ({users.filter(u => u.userType === 'customer').length})
                 </Text>
-                <Text style={styles.orderInfo}>
-                  📦 {order.packages.length} packages • {order.totalWeight} lbs • ${order.price.total}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sortButton, userSortBy === 'drivers' && styles.activeSortButton]}
+                onPress={() => setUserSortBy('drivers')}
+              >
+                <Text style={[styles.sortButtonText, userSortBy === 'drivers' && styles.activeSortButtonText]}>
+                  Drivers ({users.filter(u => u.userType === 'driver').length})
                 </Text>
-                <Text style={styles.orderInfo}>
-                  🚚 {order.deliveryWindow} • {order.driverId ? `Driver: ${order.driverId}` : 'No driver assigned'}
-                </Text>
-              </View>
-
-              <View style={styles.orderActions}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => {
-                    setSelectedOrder(order);
-                    setIsOrderModalVisible(true);
-                  }}
-                >
-                  <Text style={styles.actionButtonText}>✏️ Edit</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => {
-                    setSelectedOrder(order);
-                    // Placeholder: In production, this would open a driver selection modal
-                    Alert.alert('Driver Selection', 'Driver selection modal would open here');
-                  }}
-                >
-                  <Text style={styles.actionButtonText}>👤 Assign Driver</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.deleteButton]}
-                  onPress={() => deleteOrder(order.id)}
-                >
-                  <Text style={styles.actionButtonText}>🗑️ Delete</Text>
-                </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             </View>
-          ))}
-
-          {filteredOrders.length === 0 && (
-            <Text style={styles.noOrdersText}>
-              {searchTerm ? 'No orders match your search.' : 'No orders found.'}
-            </Text>
-          )}
-        </View>
-      )}
-
-      {activeTab === 'users' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>User Management</Text>
-          <Text style={styles.placeholderText}>
-            🔧 User management interface coming soon...
-          </Text>
-          <Text style={styles.placeholderText}>
-            This will include:
-          </Text>
-          <Text style={styles.placeholderText}>• Edit customer information</Text>
-          <Text style={styles.placeholderText}>• Manage driver accounts</Text>
-          <Text style={styles.placeholderText}>• Adjust driver commission rates</Text>
-          <Text style={styles.placeholderText}>• View business customer details</Text>
-        </View>
-      )}
-
-      {activeTab === 'analytics' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Business Analytics</Text>
-          <Text style={styles.placeholderText}>
-            📊 Analytics dashboard coming soon...
-          </Text>
-          <Text style={styles.placeholderText}>
-            This will include:
-          </Text>
-          <Text style={styles.placeholderText}>• Revenue tracking</Text>
-          <Text style={styles.placeholderText}>• Driver performance metrics</Text>
-          <Text style={styles.placeholderText}>• Delivery time analytics</Text>
-          <Text style={styles.placeholderText}>• Customer satisfaction scores</Text>
-        </View>
-      )}
-
-      {/* Order Edit Modal */}
-      <Modal
-        visible={isOrderModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsOrderModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Order</Text>
-            
-            {selectedOrder && (
-              <View>
-                <Text style={styles.modalLabel}>Status:</Text>
-                <View style={styles.statusOptions}>
-                  {Object.values(OrderStatus).map((status) => (
-                    <TouchableOpacity
-                      key={status}
-                      style={[
-                        styles.statusOption,
-                        selectedOrder.status === status && styles.selectedStatusOption
-                      ]}
-                      onPress={() => updateOrderStatus(selectedOrder.id, status)}
-                    >
-                      <Text style={[
-                        styles.statusOptionText,
-                        selectedOrder.status === status && styles.selectedStatusOptionText
-                      ]}>
-                        {getStatusLabel(status)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.modalLabel}>Priority:</Text>
-                <View style={styles.priorityOptions}>
-                  {['low', 'normal', 'high', 'urgent'].map((priority) => (
-                    <TouchableOpacity
-                      key={priority}
-                      style={[
-                        styles.priorityOption,
-                        selectedOrder.priority === priority && styles.selectedPriorityOption
-                      ]}
-                      onPress={() => {
-                        // Placeholder: In production, this would update the order
-                        Alert.alert('Priority Update', `Priority updated to ${priority}`);
-                      }}
-                    >
-                      <Text style={[
-                        styles.priorityOptionText,
-                        selectedOrder.priority === priority && styles.selectedPriorityOptionText
-                      ]}>
-                        {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setIsOrderModalVisible(false)}
-                >
-                  <Text style={styles.closeButtonText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
+
+          <FlatList
+            data={getFilteredUsers()}
+            renderItem={renderUserItem}
+            keyExtractor={(item) => item.id || item._id || Math.random().toString()}
+            contentContainerStyle={styles.listContainer}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListEmptyComponent={renderEmptyState}
+            showsVerticalScrollIndicator={false}
+          />
         </View>
-      </Modal>
-    </ScrollView>
+      )}
+        </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#1a1a2e',
+  },
+  header: {
     padding: 20,
-    backgroundColor: '#f5f5f5',
+    paddingTop: 40,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    color: '#333',
+    color: '#ffffff',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#ffffff',
+    opacity: 0.8,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: '#16213e',
     borderRadius: 12,
     padding: 4,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    margin: 20,
+    marginBottom: 10,
   },
   tab: {
     flex: 1,
@@ -356,223 +490,220 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeTab: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#00d4aa',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: '#ffffff',
+    opacity: 0.7,
   },
   activeTabText: {
-    color: 'white',
+    color: '#1a1a2e',
+    opacity: 1,
   },
-  section: {
-    backgroundColor: 'white',
-    borderRadius: 12,
+  listContainer: {
     padding: 20,
-    marginBottom: 20,
+    paddingTop: 0,
+  },
+  itemCard: {
+    backgroundColor: '#16213e',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  sectionHeader: {
+  itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 15,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-  },
-  refreshButton: {
-    backgroundColor: '#28a745',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  refreshButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-    fontSize: 16,
-    backgroundColor: 'white',
-  },
-  orderCard: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    backgroundColor: '#fafafa',
-  },
-  orderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  trackingNumber: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+  itemId: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
   },
   statusText: {
-    color: 'white',
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  userTypeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  userTypeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  itemDetails: {
+    gap: 8,
+  },
+  detailRow: {
+    fontSize: 14,
+    color: '#ffffff',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    fontWeight: 'bold',
+    color: '#00d4aa',
+  },
+  analyticsContainer: {
+    padding: 20,
+  },
+  analyticsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 15,
+  },
+  analyticsCard: {
+    backgroundColor: '#16213e',
+    borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    width: '47%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  analyticsNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#00d4aa',
+    marginBottom: 5,
+  },
+  analyticsLabel: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.8,
+    textAlign: 'center',
+  },
+  usersContainer: {
+    flex: 1,
+  },
+  sortContainer: {
+    padding: 20,
+    paddingBottom: 10,
+  },
+  sortTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 10,
+  },
+  sortButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sortButton: {
+    backgroundColor: '#2a2a3e',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  activeSortButton: {
+    backgroundColor: '#00d4aa',
+  },
+  sortButtonText: {
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: '600',
   },
-  orderDetails: {
-    marginBottom: 16,
+  activeSortButtonText: {
+    color: '#1a1a2e',
   },
-  addressText: {
-    fontSize: 14,
-    marginBottom: 4,
-    color: '#555',
-  },
-  label: {
-    fontWeight: '600',
-    color: '#333',
-  },
-  orderInfo: {
-    fontSize: 14,
-    marginBottom: 4,
-    color: '#666',
-  },
-  orderActions: {
+  approvalButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
+    marginTop: 15,
   },
-  actionButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
+  approveButton: {
+    backgroundColor: '#66bb6a',
+    borderRadius: 8,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 6,
     flex: 1,
     alignItems: 'center',
   },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '500',
+  approveButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  rejectButton: {
+    backgroundColor: '#ef5350',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    flex: 1,
+    alignItems: 'center',
+  },
+  rejectButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  deleteButtonContainer: {
+    marginTop: 10,
+    alignItems: 'center',
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
-  },
-  noOrdersText: {
-    textAlign: 'center',
-    color: '#666',
-    fontStyle: 'italic',
-    marginTop: 20,
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    backgroundColor: '#ef5350',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     alignItems: 'center',
   },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
+  deleteButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 20,
-    textAlign: 'center',
-    color: '#333',
-  },
-  modalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
-  },
-  statusOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  statusOption: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  selectedStatusOption: {
-    borderColor: '#007AFF',
-    backgroundColor: '#f0f8ff',
-  },
-  statusOptionText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  selectedStatusOptionText: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  priorityOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  priorityOption: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  selectedPriorityOption: {
-    borderColor: '#007AFF',
-    backgroundColor: '#f0f8ff',
-  },
-  priorityOptionText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  selectedPriorityOptionText: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  closeButton: {
-    backgroundColor: '#6c757d',
-    padding: 12,
-    borderRadius: 6,
+  emptyState: {
     alignItems: 'center',
+    paddingVertical: 60,
   },
-  closeButtonText: {
-    color: 'white',
+  emptyStateIcon: {
+    fontSize: 80,
+    marginBottom: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 10,
+  },
+  emptyStateText: {
     fontSize: 16,
-    fontWeight: '600',
+    color: '#ffffff',
+    opacity: 0.7,
+    textAlign: 'center',
+    paddingHorizontal: 40,
   },
 });
 
-
+export default AdminDashboardScreen;

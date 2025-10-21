@@ -1,0 +1,47 @@
+/* Global styles to ensure scrolling works properly */
+html, body {
+  height: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  height: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure React Native Web components can scroll */
+.rn-scroll-view {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for potential scrolling issues */
+* {
+  box-sizing: border-box;
+}
+
+/* Force scrolling to work on all elements */
+div[style*="overflow"] {
+  overflow: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Ensure scrollbars are functional */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

@@ -16,22 +16,70 @@ const OrdersScreen: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-
-  // Get the current user ID from auth context
-  const customerId = user?.id || 'demo-user-id';
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
 
   useEffect(() => {
     loadOrders();
+    
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      loadOrders();
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const loadOrders = async () => {
     try {
-      const customerOrders = await orderService.getOrdersByCustomer(customerId);
-      setOrders(customerOrders);
+      if (!user?.id) {
+        setOrders([]);
+        return;
+      }
+      
+      console.log('Loading orders for user:', user.id);
+      const allCustomerOrders = await orderService.getOrdersByCustomer(user.id);
+      console.log('Found all orders:', allCustomerOrders.length);
+      
+      // Filter to show only active orders (not completed or cancelled)
+      console.log('All customer orders statuses:', allCustomerOrders.map(o => ({ id: o.id.slice(-8), status: o.status })));
+      
+      const activeOrders = allCustomerOrders.filter(order => 
+        order.status !== OrderStatus.DELIVERED && 
+        order.status !== OrderStatus.CANCELLED
+      );
+      
+      console.log('Active orders:', activeOrders.length);
+      console.log('Active orders details:', activeOrders.map(o => ({ id: o.id.slice(-8), status: o.status })));
+      setOrders(activeOrders);
     } catch (error) {
       console.error('Error loading orders:', error);
     }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    Alert.alert(
+      'Cancel Order',
+      'Are you sure you want to cancel this order? This action cannot be undone.',
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await orderService.cancelOrder(orderId);
+              Alert.alert('Success', 'Order has been cancelled');
+              loadOrders(); // Refresh the orders list
+            } catch (error) {
+              Alert.alert('Error', error instanceof Error ? error.message : 'Failed to cancel order');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const onRefresh = async () => {
@@ -40,47 +88,6 @@ const OrdersScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const getStatusColor = (status: OrderStatus) => {
-    switch (status) {
-      case OrderStatus.PENDING:
-        return '#ffa726';
-      case OrderStatus.CONFIRMED:
-        return '#42a5f5';
-      case OrderStatus.ASSIGNED:
-        return '#7e57c2';
-      case OrderStatus.PICKED_UP:
-        return '#26a69a';
-      case OrderStatus.IN_TRANSIT:
-        return '#ff7043';
-      case OrderStatus.DELIVERED:
-        return '#66bb6a';
-      case OrderStatus.CANCELLED:
-        return '#ef5350';
-      default:
-        return '#9e9e9e';
-    }
-  };
-
-  const getStatusText = (status: OrderStatus) => {
-    switch (status) {
-      case OrderStatus.PENDING:
-        return 'Pending';
-      case OrderStatus.CONFIRMED:
-        return 'Confirmed';
-      case OrderStatus.ASSIGNED:
-        return 'Driver Assigned';
-      case OrderStatus.PICKED_UP:
-        return 'Picked Up';
-      case OrderStatus.IN_TRANSIT:
-        return 'In Transit';
-      case OrderStatus.DELIVERED:
-        return 'Delivered';
-      case OrderStatus.CANCELLED:
-        return 'Cancelled';
-      default:
-        return 'Unknown';
-    }
-  };
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -92,100 +99,159 @@ const OrdersScreen: React.FC = () => {
     });
   };
 
-  const renderOrderItem = ({ item }: { item: Order }) => (
-    <TouchableOpacity
-      style={styles.orderItem}
-      onPress={() => setSelectedOrder(selectedOrder?.id === item.id ? null : item)}
-    >
-      <View style={styles.orderHeader}>
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderId}>Order #{item.id.slice(-8)}</Text>
-          <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
-        </View>
-      </View>
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return '#ffa726'; // Orange for Pending
+      case 'ASSIGNED':
+        return '#42a5f5'; // Blue for Accepted
+      case 'PICKED_UP':
+        return '#26a69a'; // Teal for Picked Up
+      case 'IN_TRANSIT':
+        return '#ff7043'; // Orange for In Transit
+      case 'DELIVERED':
+        return '#4caf50'; // Green for Delivered
+      case 'CANCELLED':
+        return '#f44336'; // Red for Cancelled
+      default:
+        return '#9e9e9e';
+    }
+  };
 
-      <View style={styles.orderDetails}>
-        <View style={styles.addressRow}>
-          <Text style={styles.addressLabel}>From:</Text>
-          <Text style={styles.addressText} numberOfLines={1}>
-            {item.pickupAddress}
-          </Text>
-        </View>
-        <View style={styles.addressRow}>
-          <Text style={styles.addressLabel}>To:</Text>
-          <Text style={styles.addressText} numberOfLines={1}>
-            {item.dropoffAddress}
-          </Text>
-        </View>
-      </View>
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return 'Pending';
+      case 'ASSIGNED':
+        return 'Accepted';
+      case 'PICKED_UP':
+        return 'Picked Up';
+      case 'IN_TRANSIT':
+        return 'In Transit';
+      case 'DELIVERED':
+        return 'Delivered';
+      case 'CANCELLED':
+        return 'Cancelled';
+      default:
+        return 'Unknown';
+    }
+  };
 
-      <View style={styles.orderFooter}>
-        <View style={styles.packageInfo}>
-          <Text style={styles.packageText}>
-            {item.packages.length} package{item.packages.length !== 1 ? 's' : ''}
-          </Text>
-          <Text style={styles.weightText}>{item.totalWeight}kg</Text>
-        </View>
-        <Text style={styles.priceText}>${item.price.total.toFixed(2)}</Text>
-      </View>
-
-      {/* Expanded Order Details */}
-      {selectedOrder?.id === item.id && (
-        <View style={styles.expandedDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Order Status:</Text>
-            <Text style={styles.detailValue}>{getStatusText(item.status)}</Text>
+  const renderOrderItem = ({ item }: { item: Order }) => {
+    const isExpanded = expandedOrder === item.id;
+    
+    return (
+      <View style={styles.orderCard}>
+        <TouchableOpacity 
+          style={styles.orderHeader}
+          onPress={() => setExpandedOrder(isExpanded ? null : item.id)}
+        >
+          <View style={styles.orderHeaderContent}>
+            <Text style={styles.orderId}>Order #{item.id.slice(-8)}</Text>
+            <Text style={styles.orderDate}>{formatDate(item.createdAt)}</Text>
           </View>
+          <View style={styles.orderHeaderRight}>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+              <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+            </View>
+            <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
+          </View>
+        </TouchableOpacity>
+        
+        <View style={styles.orderDetails}>
+          <Text style={styles.addressLabel}>From:</Text>
+          <Text style={styles.addressText}>
+            {typeof item.pickupAddress === 'string' 
+              ? item.pickupAddress 
+              : `${item.pickupAddress?.street || ''}, ${item.pickupAddress?.city || ''}, ${item.pickupAddress?.state || ''} ${item.pickupAddress?.zipCode || ''}`
+            }
+          </Text>
           
-          {item.driverId && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Driver ID:</Text>
-              <Text style={styles.detailValue}>{item.driverId}</Text>
-            </View>
-          )}
+          <Text style={styles.addressLabel}>To:</Text>
+          <Text style={styles.addressText}>
+            {typeof item.deliveryAddress === 'string' 
+              ? item.deliveryAddress 
+              : `${item.deliveryAddress?.street || ''}, ${item.deliveryAddress?.city || ''}, ${item.deliveryAddress?.state || ''} ${item.deliveryAddress?.zipCode || ''}`
+            }
+          </Text>
+        </View>
+        
+        <View style={styles.orderFooter}>
+          <Text style={styles.packageInfo}>
+            {item.packageDetails?.numberOfPackages || 1} package{(item.packageDetails?.numberOfPackages || 1) !== 1 ? 's' : ''} • {item.packageDetails?.weight || 0}lbs
+          </Text>
+          <Text style={styles.priceText}>${item.price.total.toFixed(2)}</Text>
+        </View>
 
-          {item.pickupTime && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Picked Up:</Text>
-              <Text style={styles.detailValue}>{formatDate(item.pickupTime)}</Text>
-            </View>
-          )}
-
-          {item.deliveryTime && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Delivered:</Text>
-              <Text style={styles.detailValue}>{formatDate(item.deliveryTime)}</Text>
-            </View>
-          )}
-
-          {item.notes && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Notes:</Text>
-              <Text style={styles.detailValue}>{item.notes}</Text>
-            </View>
-          )}
-
-          <View style={styles.packagesList}>
-            <Text style={styles.packagesTitle}>Packages:</Text>
-            {item.packages.map((pkg, index) => (
-              <View key={pkg.id} style={styles.packageItem}>
-                <Text style={styles.packageNumber}>Package {index + 1}</Text>
-                <Text style={styles.packageDetails}>
-                  {pkg.weight}kg • {pkg.length}×{pkg.width}×{pkg.height}cm
+        {isExpanded && (
+          <View style={styles.expandedDetails}>
+            {/* Package Details */}
+            <View style={styles.detailsSection}>
+              <Text style={styles.detailsTitle}>Package Details</Text>
+              <View style={styles.packageItem}>
+                <Text style={styles.packageNumber}>
+                  {item.packageDetails?.numberOfPackages || 1} Package{(item.packageDetails?.numberOfPackages || 1) !== 1 ? 's' : ''}
                 </Text>
-                {pkg.description && (
-                  <Text style={styles.packageDescription}>{pkg.description}</Text>
+                <Text style={styles.packageSpecs}>
+                  {item.packageDetails?.weight || 0}lbs • {item.packageDetails?.dimensions?.length || 0}×{item.packageDetails?.dimensions?.width || 0}×{item.packageDetails?.dimensions?.height || 0}in
+                </Text>
+                {item.packageDetails?.description && (
+                  <Text style={styles.packageDescription}>{item.packageDetails.description}</Text>
                 )}
               </View>
-            ))}
+            </View>
+
+            {/* Cost Breakdown */}
+            <View style={styles.detailsSection}>
+              <Text style={styles.detailsTitle}>Cost Breakdown</Text>
+              <View style={styles.costBreakdown}>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Base Price:</Text>
+                  <Text style={styles.costValue}>${item.price.basePrice.toFixed(2)}</Text>
+                </View>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Distance Fee:</Text>
+                  <Text style={styles.costValue}>${item.price.distanceFee.toFixed(2)}</Text>
+                </View>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Weight Fee:</Text>
+                  <Text style={styles.costValue}>${item.price.weightFee.toFixed(2)}</Text>
+                </View>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Package Fee:</Text>
+                  <Text style={styles.costValue}>${item.price.packageFee.toFixed(2)}</Text>
+                </View>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Subtotal:</Text>
+                  <Text style={styles.costValue}>${item.price.subtotal.toFixed(2)}</Text>
+                </View>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>GST:</Text>
+                  <Text style={styles.costValue}>${item.price.gst.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.costRow, styles.totalRow]}>
+                  <Text style={styles.totalLabel}>Total:</Text>
+                  <Text style={styles.totalValue}>${item.price.total.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Cancel Button - only show for orders that can be cancelled */}
+            {item.status === OrderStatus.PENDING || item.status === OrderStatus.ASSIGNED ? (
+              <View style={styles.detailsSection}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => handleCancelOrder(item.id)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+        )}
+      </View>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -244,7 +310,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 0,
   },
-  orderItem: {
+  orderCard: {
     backgroundColor: '#16213e',
     borderRadius: 20,
     padding: 20,
@@ -263,20 +329,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
+    paddingVertical: 5,
   },
-  orderInfo: {
+  orderHeaderContent: {
     flex: 1,
   },
-  orderId: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 5,
-  },
-  orderDate: {
-    fontSize: 14,
-    color: '#ffffff',
-    opacity: 0.7,
+  orderHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -288,23 +349,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
+  expandIcon: {
+    fontSize: 16,
+    color: '#00d4aa',
+    fontWeight: 'bold',
+  },
+  orderId: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  orderDate: {
+    fontSize: 14,
+    color: '#ffffff',
+    opacity: 0.7,
+  },
   orderDetails: {
     marginBottom: 15,
-  },
-  addressRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
   },
   addressLabel: {
     fontSize: 14,
     color: '#00d4aa',
     fontWeight: '600',
-    width: 40,
+    marginTop: 8,
   },
   addressText: {
     fontSize: 14,
     color: '#ffffff',
-    flex: 1,
+    marginBottom: 4,
   },
   orderFooter: {
     flexDirection: 'row',
@@ -312,15 +384,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   packageInfo: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  packageText: {
-    fontSize: 14,
-    color: '#ffffff',
-    opacity: 0.8,
-  },
-  weightText: {
     fontSize: 14,
     color: '#ffffff',
     opacity: 0.8,
@@ -329,61 +392,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#00d4aa',
-  },
-  expandedDetails: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#ffffff',
-    opacity: 0.3,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: '#ffffff',
-    opacity: 0.8,
-  },
-  detailValue: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  packagesList: {
-    marginTop: 15,
-  },
-  packagesTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 10,
-  },
-  packageItem: {
-    backgroundColor: '#0f3460',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-  },
-  packageNumber: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#00d4aa',
-    marginBottom: 5,
-  },
-  packageDetails: {
-    fontSize: 12,
-    color: '#ffffff',
-    opacity: 0.8,
-    marginBottom: 3,
-  },
-  packageDescription: {
-    fontSize: 12,
-    color: '#ffffff',
-    opacity: 0.6,
-    fontStyle: 'italic',
   },
   emptyState: {
     alignItems: 'center',
@@ -406,7 +414,95 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
   },
+  expandedDetails: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#ffffff',
+    opacity: 0.3,
+  },
+  detailsSection: {
+    marginBottom: 20,
+  },
+  detailsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#00d4aa',
+    marginBottom: 10,
+  },
+  packageItem: {
+    backgroundColor: '#0f3460',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  packageNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#00d4aa',
+    marginBottom: 5,
+  },
+  packageSpecs: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.8,
+    marginBottom: 3,
+  },
+  packageDescription: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.6,
+    fontStyle: 'italic',
+  },
+  costBreakdown: {
+    backgroundColor: '#0f3460',
+    borderRadius: 8,
+    padding: 12,
+  },
+  costRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  costLabel: {
+    fontSize: 14,
+    color: '#ffffff',
+    opacity: 0.8,
+  },
+  costValue: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#ffffff',
+    opacity: 0.3,
+    paddingTop: 8,
+    marginTop: 5,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#00d4aa',
+  },
+  totalValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#00d4aa',
+  },
+  cancelButton: {
+    backgroundColor: '#ef5350',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  cancelButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
 
 export default OrdersScreen;
-

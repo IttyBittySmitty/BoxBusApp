@@ -39,49 +39,36 @@ const userSchema = new mongoose.Schema({
     enum: ['customer', 'driver', 'admin'],
     default: 'customer'
   },
+  isApproved: {
+    type: Boolean,
+    default: function() {
+      // Customers are auto-approved, drivers need admin approval
+      return this.userType === 'customer';
+    }
+  },
   isVerified: {
     type: Boolean,
     default: false
   },
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  loyaltyPoints: {
+    type: Number,
+    default: 0
+  },
+  totalOrders: {
+    type: Number,
+    default: 0
+  },
+  loyaltyTier: {
+    type: String,
+    enum: ['bronze', 'silver', 'gold', 'platinum'],
+    default: 'bronze'
+  },
   profileImage: String,
   
-  // Driver-specific fields
-  driverInfo: {
-    vehicleMake: String,
-    vehicleModel: String,
-    vehicleYear: Number,
-    cargoCapacity: Number, // in cubic feet
-    licensePlate: String,
-    driverLicense: String, // license number
-    insuranceProof: String, // insurance policy number
-    commissionRate: {
-      type: Number,
-      default: 60, // 60% by default
-      min: 40,
-      max: 80
-    },
-    isAvailable: {
-      type: Boolean,
-      default: false
-    },
-    availability: [{
-      day: {
-        type: String,
-        enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-      },
-      startTime: String, // Format: "09:00"
-      endTime: String,   // Format: "17:00"
-      isAvailable: {
-        type: Boolean,
-        default: true
-      }
-    }],
-    currentLocation: {
-      latitude: Number,
-      longitude: Number,
-      lastUpdated: Date
-    }
-  },
   
   // Business customer fields
   businessInfo: {

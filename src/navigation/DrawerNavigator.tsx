@@ -4,11 +4,11 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import DeliveryScreen from '../screens/DeliveryScreen';
 import OrdersScreen from '../screens/OrdersScreen';
+import ArchiveScreen from '../screens/ArchiveScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import CustomerAnalyticsScreen from '../screens/CustomerAnalyticsScreen';
-import PackagePhotoScreen from '../screens/PackagePhotoScreen';
-import BusinessRegistrationScreen from '../screens/BusinessRegistrationScreen';
-import SupportScreen from '../screens/SupportScreen';
+import DriverDashboardScreen from '../screens/DriverDashboardScreen';
+import AdminDashboardScreen from '../screens/AdminDashboardScreen';
+import ArchivedUsersScreen from '../screens/ArchivedUsersScreen';
 import CustomDrawerContent from './CustomDrawerContent';
 
 const Drawer = createDrawerNavigator();
@@ -26,6 +26,10 @@ const CustomHeader = ({ navigation }: any) => (
 );
 
 export default function DrawerNavigator() {
+  const { user } = useAuth();
+  const isDriver = user?.userType === 'driver';
+  const isAdmin = user?.userType === 'admin';
+
   return (
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
@@ -40,67 +44,108 @@ export default function DrawerNavigator() {
         },
       }}
     >
-      {/* New Delivery */}
-      <Drawer.Screen
-        name="NewDelivery"
-        component={DeliveryScreen}
-        options={{
-          title: 'New Delivery',
-          drawerLabel: '🚚 New Delivery',
-        }}
-      />
-      
-      {/* Orders */}
-      <Drawer.Screen
-        name="Orders"
-        component={OrdersScreen}
-        options={{
-          title: 'My Orders',
-          drawerLabel: '📦 My Orders',
-        }}
-      />
+      {isAdmin ? (
+        // Admin Screens
+        <>
+          {/* Admin Dashboard */}
+          <Drawer.Screen
+            name="AdminDashboard"
+            component={AdminDashboardScreen}
+            options={{
+              title: 'Admin Dashboard',
+              drawerLabel: '👑 Admin Dashboard',
+            }}
+          />
 
-      {/* Analytics */}
-      <Drawer.Screen
-        name="CustomerAnalytics"
-        component={CustomerAnalyticsScreen}
-        options={{
-          title: 'Analytics',
-          drawerLabel: '📊 Analytics',
-        }}
-      />
+          {/* Archive */}
+          <Drawer.Screen
+            name="Archive"
+            component={ArchiveScreen}
+            options={{
+              title: 'Completed Orders',
+              drawerLabel: '✅ Completed Orders',
+            }}
+          />
 
-      {/* Package Photos */}
-      <Drawer.Screen
-        name="PackagePhotos"
-        component={PackagePhotoScreen}
-        options={{
-          title: 'Package Photos',
-          drawerLabel: '📸 Package Photos',
-        }}
-      />
+          {/* Archived Users */}
+          <Drawer.Screen
+            name="ArchivedUsers"
+            component={ArchivedUsersScreen}
+            options={{
+              title: 'Archived Users',
+              drawerLabel: '🗃️ Archived Users',
+            }}
+          />
+        </>
+      ) : isDriver ? (
+        // Driver Screens
+        <>
+          {/* Driver Dashboard */}
+          <Drawer.Screen
+            name="DriverDashboard"
+            component={DriverDashboardScreen}
+            options={{
+              title: 'Driver Dashboard',
+              drawerLabel: '🚚 Dashboard',
+            }}
+          />
+          
+          {/* Driver Orders */}
+          <Drawer.Screen
+            name="Orders"
+            component={OrdersScreen}
+            options={{
+              title: 'My Orders',
+              drawerLabel: '📦 My Orders',
+            }}
+          />
 
-      {/* Business Registration */}
-      <Drawer.Screen
-        name="BusinessRegistration"
-        component={BusinessRegistrationScreen}
-        options={{
-          title: 'Business Registration',
-          drawerLabel: '🏢 Business Registration',
-        }}
-      />
+          {/* Archive */}
+          <Drawer.Screen
+            name="Archive"
+            component={ArchiveScreen}
+            options={{
+              title: 'Completed Orders',
+              drawerLabel: '✅ Completed Orders',
+            }}
+          />
+        </>
+      ) : (
+        // Customer Screens
+        <>
+          {/* New Delivery */}
+          <Drawer.Screen
+            name="NewDelivery"
+            component={DeliveryScreen}
+            options={{
+              title: 'New Delivery',
+              drawerLabel: '🚚 New Delivery',
+            }}
+          />
+          
+          {/* Orders */}
+          <Drawer.Screen
+            name="Orders"
+            component={OrdersScreen}
+            options={{
+              title: 'My Orders',
+              drawerLabel: '📦 My Orders',
+            }}
+          />
 
-      {/* Support */}
-      <Drawer.Screen
-        name="Support"
-        component={SupportScreen}
-        options={{
-          title: 'Support',
-          drawerLabel: '🆘 Support',
-        }}
-      />
+          {/* Archive */}
+          <Drawer.Screen
+            name="Archive"
+            component={ArchiveScreen}
+            options={{
+              title: 'Completed Orders',
+              drawerLabel: '✅ Completed Orders',
+            }}
+          />
+        </>
+      )}
 
-      {/* Profile */}
+      {/* Profile - Common for both */}
       <Drawer.Screen
         name="Profile"
         component={ProfileScreen}

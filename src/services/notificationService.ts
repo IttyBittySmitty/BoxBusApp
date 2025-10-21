@@ -7,7 +7,7 @@
 
 export interface Notification {
   id: string;
-  type: 'order_update' | 'driver_assigned' | 'delivery_complete' | 'payment_received' | 'system';
+  type: 'order_update' | 'delivery_complete' | 'payment_received' | 'system';
   title: string;
   message: string;
   userId: string;
@@ -23,7 +23,6 @@ export interface NotificationPreferences {
   emailNotifications: boolean;
   smsNotifications: boolean;
   orderUpdates: boolean;
-  driverUpdates: boolean;
   paymentUpdates: boolean;
   marketingUpdates: boolean;
 }
@@ -78,17 +77,6 @@ class NotificationService {
     });
   }
 
-  // Send driver assignment notification
-  public async sendDriverAssignedNotification(customerId: string, orderId: string, driverName: string): Promise<void> {
-    await this.sendNotification(customerId, {
-      type: 'driver_assigned',
-      title: 'Driver Assigned',
-      message: `Your order has been assigned to ${driverName}. They will contact you shortly.`,
-      userId: customerId,
-      orderId,
-      data: { driverName }
-    });
-  }
 
   // Send delivery completion notification
   public async sendDeliveryCompleteNotification(customerId: string, orderId: string): Promise<void> {
@@ -215,7 +203,6 @@ class NotificationService {
       emailNotifications: true,
       smsNotifications: false,
       orderUpdates: true,
-      driverUpdates: true,
       paymentUpdates: true,
       marketingUpdates: false,
     };
@@ -236,22 +223,18 @@ class NotificationService {
 
   // Get unread notifications count for a user
   public async getUnreadCount(userId: string): Promise<number> {
-    // Placeholder: In production, this would query your backend
-    return Math.floor(Math.random() * 5); // Random number for demo
+    // TODO: Implement real notification count from backend
+    return 0;
   }
 
-  // Simulate real-time order updates (for demo purposes)
-  public startOrderTrackingSimulation(orderId: string, customerId: string, driverId: string): void {
-    console.log('🚚 Starting order tracking simulation for order:', orderId);
+  // Start real-time order tracking
+  public startOrderTrackingSimulation(orderId: string, customerId: string): void {
+    console.log('🚚 Starting order tracking for order:', orderId);
     
     // Simulate order status updates
     setTimeout(() => {
-      this.sendOrderUpdateNotification(customerId, orderId, 'assigned', 'Your order has been assigned to a driver!');
+      this.sendOrderUpdateNotification(customerId, orderId, 'assigned', 'Your order has been assigned!');
     }, 5000);
-
-    setTimeout(() => {
-      this.sendDriverAssignedNotification(customerId, orderId, 'John Driver');
-    }, 10000);
 
     setTimeout(() => {
       this.sendOrderUpdateNotification(customerId, orderId, 'picked-up', 'Your order has been picked up and is on its way!');

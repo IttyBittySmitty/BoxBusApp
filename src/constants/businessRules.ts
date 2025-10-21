@@ -49,27 +49,10 @@ export const BUSINESS_RULES = {
   GST_RATE: 0.05, // 5% GST
   INSURANCE_COVERAGE: 1000, // $1000 default coverage (built into base price)
   
-  // Driver compensation
-  DEFAULT_COMMISSION_RATE: 60, // 60% default
-  MIN_COMMISSION_RATE: 40, // 40% minimum
-  MAX_COMMISSION_RATE: 80, // 80% maximum
-  
-  // Order statuses
-  ORDER_STATUSES: {
-    PENDING: 'pending',
-    CONFIRMED: 'confirmed',
-    ASSIGNED: 'assigned',
-    PICKED_UP: 'picked-up',
-    IN_TRANSIT: 'in-transit',
-    DELIVERED: 'delivered',
-    CANCELLED: 'cancelled'
-  },
   
   // User types
   USER_TYPES: {
-    CUSTOMER: 'customer',
-    DRIVER: 'driver',
-    ADMIN: 'admin'
+    CUSTOMER: 'customer'
   },
   
   // Loyalty program

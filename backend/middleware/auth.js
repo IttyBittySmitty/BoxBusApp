@@ -23,31 +23,17 @@ const auth = async (req, res, next) => {
   }
 };
 
-// Middleware to check if user is a driver
-const isDriver = (req, res, next) => {
-  if (req.user.userType !== 'driver') {
-    return res.status(403).json({ message: 'Access denied. Driver privileges required.' });
-  }
-  next();
-};
 
-// Middleware to check if user is an admin
-const isAdmin = (req, res, next) => {
-  if (req.user.userType !== 'admin') {
-    return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
-  }
-  next();
-};
 
-// Middleware to check if user owns the resource or is admin
+// Middleware to check if user owns the resource
 const isOwnerOrAdmin = (resourceUserId) => {
   return (req, res, next) => {
-    if (req.user.userType === 'admin' || req.user._id.toString() === resourceUserId.toString()) {
+    if (req.user._id.toString() === resourceUserId.toString()) {
       return next();
     }
     res.status(403).json({ message: 'Access denied.' });
   };
 };
 
-module.exports = { auth, isDriver, isAdmin, isOwnerOrAdmin };
+module.exports = { auth, isOwnerOrAdmin };
 

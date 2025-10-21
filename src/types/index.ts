@@ -1,3 +1,5 @@
+export type UserType = 'customer' | 'driver' | 'admin';
+
 export interface User {
   id: string;
   email: string;
@@ -6,7 +8,9 @@ export interface User {
   name?: string; // For compatibility
   phone: string;
   address: string;
-  userType?: 'customer' | 'driver' | 'admin';
+  userType: UserType;
+  isApproved?: boolean; // For drivers - admin approval status
+  isArchived?: boolean; // For archiving users (rejected drivers, blocked customers)
   loyaltyPoints?: number;
   totalOrders?: number;
   loyaltyTier?: 'bronze' | 'silver' | 'gold';
@@ -35,10 +39,19 @@ export interface Address {
   };
 }
 
+export enum OrderStatus {
+  PENDING = 'PENDING',
+  ASSIGNED = 'ASSIGNED',
+  PICKED_UP = 'PICKED_UP',
+  IN_TRANSIT = 'IN_TRANSIT',
+  DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED'
+}
+
 export interface Order {
   id: string;
   customerId: string;
-  driverId?: string;
+  driverId?: string; // Assigned driver ID
   pickupAddress: string;
   dropoffAddress: string;
   packages: Package[];
@@ -49,8 +62,8 @@ export interface Order {
   deliveryCutoff: Date;
   estimatedDelivery?: Date;
   actualDelivery?: Date;
-  status: OrderStatus;
   priority: 'low' | 'normal' | 'high' | 'urgent';
+  status: OrderStatus;
   
   // Detailed pricing breakdown
   price: {
@@ -64,13 +77,6 @@ export interface Order {
     total: number;
   };
   
-  // Driver compensation
-  driverCompensation: {
-    commissionRate: number;
-    commissionAmount: number;
-    tips: number;
-    totalEarnings: number;
-  };
   
   // Insurance (built into pricing)
   insurance: {
@@ -82,7 +88,6 @@ export interface Order {
   trackingNumber: string;
   specialInstructions?: string;
   customerNotes?: string;
-  driverNotes?: string;
   notes?: string;
   pickupTime?: Date;
   deliveryTime?: Date;
@@ -91,27 +96,7 @@ export interface Order {
   updatedAt: Date;
 }
 
-export enum OrderStatus {
-  PENDING = 'pending',
-  CONFIRMED = 'confirmed',
-  ASSIGNED = 'assigned',
-  PICKED_UP = 'picked-up',
-  IN_TRANSIT = 'in-transit',
-  DELIVERED = 'delivered',
-  CANCELLED = 'cancelled'
-}
 
-export interface Driver {
-  id: string;
-  name: string;
-  phone: string;
-  vehicleInfo: string;
-  isAvailable: boolean;
-  currentLocation?: {
-    latitude: number;
-    longitude: number;
-  };
-}
 
 export interface AuthState {
   user: User | null;
@@ -143,6 +128,7 @@ export interface DeliveryQuote {
   totalPrice: number;
   estimatedDeliveryTime: string;
   distance: number;
+  duration: string;
   totalWeight: number;
   numberOfPackages: number;
 }

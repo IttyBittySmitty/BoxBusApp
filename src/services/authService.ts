@@ -1,16 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, AuthState } from '../types';
+import { User } from '../types';
 
-const USERS_KEY = 'boxbus_users';
+const API_BASE_URL = 'http://localhost:5000';
 const CURRENT_USER_KEY = 'boxbus_current_user';
 
 export class AuthService {
   private static instance: AuthService;
-  private users: Map<string, User> = new Map();
 
-  private constructor() {
-    this.loadUsers();
-  }
+  private constructor() {}
 
   public static getInstance(): AuthService {
     if (!AuthService.instance) {
@@ -19,71 +16,88 @@ export class AuthService {
     return AuthService.instance;
   }
 
-  private async loadUsers(): Promise<void> {
-    try {
-      const usersData = await AsyncStorage.getItem(USERS_KEY);
-      if (usersData) {
-        const usersArray = JSON.parse(usersData);
-        this.users = new Map(usersArray);
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
-  }
-
-  private async saveUsers(): Promise<void> {
-    try {
-      const usersArray = Array.from(this.users.entries());
-      await AsyncStorage.setItem(USERS_KEY, JSON.stringify(usersArray));
-    } catch (error) {
-      console.error('Error saving users:', error);
-    }
-  }
-
-  public async register(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User> {
-    // Check if user already exists
-    if (this.users.has(userData.email)) {
-      throw new Error('User with this email already exists');
-    }
-
-    const newUser: User = {
-      ...userData,
-      id: this.generateId(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    this.users.set(newUser.email, newUser);
-    await this.saveUsers();
-
-    return newUser;
-  }
-
   public async login(email: string, password: string): Promise<User> {
-    const user = this.users.get(email);
-    if (!user) {
-      throw new Error('Invalid email or password');
-    }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-    // In a real app, you would hash and verify passwords
-    // For now, we'll use a simple check (you should implement proper password hashing)
-    if (password.length < 6) {
-      throw new Error('Invalid email or password');
-    }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Login failed');
+      }
 
-    // Save current user to AsyncStorage
-    await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-    return user;
+      const data = await response.json();
+      const user = data.user;
+      const token = data.token;
+
+      // Save only token to AsyncStorage (user will be fetched from backend)
+      await AsyncStorage.setItem('auth_token', token);
+      
+      return user;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  }
+
+  public async register(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>, password: string): Promise<User> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...userData, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Registration failed');
+      }
+
+      const data = await response.json();
+      return data.user;
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
   }
 
   public async logout(): Promise<void> {
+    console.log('AuthService: Starting logout...');
     await AsyncStorage.removeItem(CURRENT_USER_KEY);
+    await AsyncStorage.removeItem('auth_token');
+    console.log('AuthService: Current user key and token removed from AsyncStorage');
   }
 
   public async getCurrentUser(): Promise<User | null> {
     try {
-      const userData = await AsyncStorage.getItem(CURRENT_USER_KEY);
-      return userData ? JSON.parse(userData) : null;
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) {
+        return null;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        // Token is invalid, clear it
+        await AsyncStorage.removeItem('auth_token');
+        return null;
+      }
+
+      const user = await response.json();
+      return user;
     } catch (error) {
       console.error('Error getting current user:', error);
       return null;
@@ -95,34 +109,134 @@ export class AuthService {
     return user !== null;
   }
 
-  private generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  public async getAllUsers(): Promise<User[]> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/users`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
+      const users = await response.json();
+      return users;
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      throw error;
+    }
   }
 
-  public async updateUser(userId: string, updates: Partial<User>): Promise<User> {
-    const user = this.users.get(userId);
-    if (!user) {
-      throw new Error('User not found');
+  public async approveDriver(userId: string): Promise<User> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}/approve`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to approve driver');
+      }
+
+      const data = await response.json();
+      return data.user;
+    } catch (error) {
+      console.error('Error approving driver:', error);
+      throw error;
     }
+  }
 
-    const updatedUser: User = {
-      ...user,
-      ...updates,
-      updatedAt: new Date(),
-    };
+  public async archiveUser(userId: string): Promise<User | null> {
+    console.log('🔍 AUTH SERVICE: archiveUser called with userId:', userId);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      console.log('🔍 AUTH SERVICE: Token exists:', !!token);
+      
+      const url = `${API_BASE_URL}/api/users/${userId}/archive`;
+      console.log('🔍 AUTH SERVICE: Making request to:', url);
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-    this.users.set(userId, updatedUser);
-    await this.saveUsers();
+      console.log('🔍 AUTH SERVICE: Response status:', response.status);
+      console.log('🔍 AUTH SERVICE: Response ok:', response.ok);
 
-    // Update current user if it's the same user
-    const currentUser = await this.getCurrentUser();
-    if (currentUser && currentUser.id === userId) {
-      await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updatedUser));
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.log('🔍 AUTH SERVICE: Error response:', errorData);
+        throw new Error(errorData.message || 'Failed to archive user');
+      }
+
+      const data = await response.json();
+      console.log('🔍 AUTH SERVICE: Success response:', data);
+      return data.user;
+    } catch (error) {
+      console.error('🔍 AUTH SERVICE: Error archiving user:', error);
+      return null;
     }
+  }
 
-    return updatedUser;
+  public async unarchiveUser(userId: string): Promise<User | null> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}/unarchive`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to unarchive user');
+      }
+
+      const data = await response.json();
+      return data.user;
+    } catch (error) {
+      console.error('Error unarchiving user:', error);
+      return null;
+    }
+  }
+
+  public async getArchivedUsers(): Promise<User[]> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${API_BASE_URL}/api/users/archived`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch archived users');
+      }
+
+      const users = await response.json();
+      return users;
+    } catch (error) {
+      console.error('Error fetching archived users:', error);
+      return [];
+    }
   }
 }
 
 export default AuthService.getInstance();
-
