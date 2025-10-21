@@ -154,12 +154,22 @@ npm start  # Start Expo development server
 ```
 
 ### Environment Variables
-Create a `.env` file in the backend directory:
+Create a `.env` file in the backend directory by copying the example:
+```bash
+cp backend/env.example backend/.env
+```
+
+Then edit `backend/.env` with your actual values:
 ```
 MONGODB_URI=mongodb://localhost:27017/boxbus
-JWT_SECRET=your-secret-key
-GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+JWT_SECRET=your-super-secret-jwt-key-here
+GOOGLE_MAPS_API_KEY=your-google-maps-api-key-here
+SENDGRID_API_KEY=your-sendgrid-api-key-here
+PORT=5000
+NODE_ENV=development
 ```
+
+**⚠️ Important**: Never commit your `.env` file to version control. It contains sensitive API keys.
 
 ## 📁 Project Structure
 
