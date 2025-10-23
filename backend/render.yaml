@@ -8,9 +8,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
       - key: MONGODB_URI
-        sync: false
+        sync: false  # Will be set manually in Render dashboard
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false  # Will be set manually in Render dashboard
