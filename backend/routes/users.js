@@ -115,36 +115,46 @@ router.post('/login', async (req, res) => {
 // Create new user (registration)
 router.post('/', async (req, res) => {
   try {
-    const { email, password, firstName, lastName, phone, address, userType } = req.body;
+    console.log('🔍 REGISTRATION: Received request body:', req.body);
+    const { email, password, firstName, lastName, phone, address, userType = 'customer' } = req.body;
+    
+    console.log('🔍 REGISTRATION: Parsed data:', { email, firstName, lastName, userType });
     
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+      console.log('🔍 REGISTRATION: User already exists:', email);
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
+    console.log('🔍 REGISTRATION: Creating new user...');
     // Create new user
     const newUser = new User({
       email,
-      password, // In production, hash this password
+      password, // Password will be hashed by pre-save middleware
       firstName,
       lastName,
       phone,
-      address,
+      address: typeof address === 'string' ? { street: address } : address, // Handle both string and object addresses
       userType,
       isApproved: userType === 'customer' ? true : false, // Customers auto-approved, drivers need approval
     });
 
+    console.log('🔍 REGISTRATION: Saving user to database...');
     await newUser.save();
+    console.log('🔍 REGISTRATION: User saved successfully with ID:', newUser._id);
     
     // Return user without password
     const userResponse = newUser.toObject();
     delete userResponse.password;
     
+    console.log('🔍 REGISTRATION: Returning success response');
     res.status(201).json({ message: 'User created successfully', user: userResponse });
   } catch (error) {
-    console.error('Create user error:', error);
-    res.status(500).json({ message: 'Error creating user' });
+    console.error('🔍 REGISTRATION: Create user error:', error);
+    console.error('🔍 REGISTRATION: Error details:', error.message);
+    console.error('🔍 REGISTRATION: Error stack:', error.stack);
+    res.status(500).json({ message: 'Error creating user', error: error.message });
   }
 });
 
@@ -312,6 +322,30 @@ router.put('/:id/approve', auth, async (req, res) => {
   } catch (error) {
     console.error('Approve driver error:', error);
     res.status(500).json({ message: 'Error approving driver' });
+  }
+});
+
+// Public endpoint to check users (for debugging)
+router.get('/debug/users', async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    res.json({ 
+      message: 'Users in database', 
+      count: users.length, 
+      users: users.map(user => ({
+        id: user._id.toString(),
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        userType: user.userType,
+        isApproved: user.isApproved,
+        isArchived: user.isArchived,
+        createdAt: user.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Debug users error:', error);
+    res.status(500).json({ message: 'Error fetching users', error: error.message });
   }
 });
 

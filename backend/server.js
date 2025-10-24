@@ -18,15 +18,17 @@ app.use((req, res, next) => {
 
 
 // MongoDB Connection
-console.log('Attempting to connect to MongoDB...');
-console.log('Using MongoDB URI:', process.env.MONGODB_URI || 'mongodb://localhost:27017/boxbus');
+console.log('🔍 MONGODB: Attempting to connect to MongoDB...');
+console.log('🔍 MONGODB: Using MongoDB URI:', process.env.MONGODB_URI || 'mongodb://localhost:27017/boxbus');
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/boxbus')
   .then(() => {
-    console.log('Connected to MongoDB successfully!');
+    console.log('✅ MONGODB: Connected to MongoDB successfully!');
+    console.log('🔍 MONGODB: Database name:', mongoose.connection.db.databaseName);
   })
   .catch(err => {
-    console.error('MongoDB connection error:', err);
-    console.error('Error details:', err.message);
+    console.error('❌ MONGODB: Connection error:', err);
+    console.error('❌ MONGODB: Error details:', err.message);
+    console.error('❌ MONGODB: Error stack:', err.stack);
   });
 
 // Basic route
