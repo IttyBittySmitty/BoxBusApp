@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
 
-const API_BASE_URL = 'http://localhost:5000';
+import { API_BASE_URL } from '../config/api';
 const CURRENT_USER_KEY = 'boxbus_current_user';
 
 export class AuthService {

@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:5000';
+import { API_BASE_URL } from '../config/api';
 
 export interface DistanceCalculationResult {
   distance: number; // in kilometers

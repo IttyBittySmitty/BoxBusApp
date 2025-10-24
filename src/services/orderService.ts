@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Order, Package, DeliveryQuote, OrderStatus } from '../types';
 import { BUSINESS_RULES, TIME_UTILS } from '../constants/businessRules';
 
-const API_BASE_URL = 'http://localhost:5000';
+import { API_BASE_URL } from '../config/api';
 // ORDERS_KEY removed - all data now comes from backend
 
 class OrderService {
