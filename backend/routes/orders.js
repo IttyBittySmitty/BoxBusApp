@@ -28,6 +28,9 @@ router.get('/', auth, async (req, res) => {
 // Create new order
 router.post('/', auth, async (req, res) => {
   try {
+    console.log('🔍 ORDER CREATION: Received request body:', req.body);
+    console.log('🔍 ORDER CREATION: User ID:', req.user._id);
+    
     // Transform string addresses to address objects
     const transformAddress = (addressString) => {
       // Simple parsing - in production you'd want more robust address parsing
@@ -75,18 +78,24 @@ router.post('/', auth, async (req, res) => {
       } : undefined
     };
 
+    console.log('🔍 ORDER CREATION: Creating order with data:', orderData);
+    
     // Create the order
     const finalOrder = new Order(orderData);
     
     // Use provided price or calculate using the BoxBus pricing algorithm
     if (orderData.price) {
       finalOrder.price = orderData.price;
+      console.log('🔍 ORDER CREATION: Using provided price:', orderData.price);
     } else {
       const calculatedPrice = finalOrder.calculatePrice();
       finalOrder.price = calculatedPrice;
+      console.log('🔍 ORDER CREATION: Calculated price:', calculatedPrice);
     }
     
+    console.log('🔍 ORDER CREATION: Saving order to database...');
     await finalOrder.save();
+    console.log('🔍 ORDER CREATION: Order saved successfully with ID:', finalOrder._id);
 
     // Transform _id to id for frontend compatibility
     const orderResponse = {
@@ -94,6 +103,7 @@ router.post('/', auth, async (req, res) => {
       id: finalOrder._id.toString()
     };
 
+    console.log('🔍 ORDER CREATION: Returning success response');
     res.status(201).json(orderResponse);
   } catch (error) {
     console.error('Create order error:', error);
