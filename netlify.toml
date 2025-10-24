@@ -1,0 +1,7 @@
+[build]
+  command = "expo export -p web"
+  publish = "dist"
+
+# Configure secrets scanning to ignore our API URL
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "REACT_APP_API_BASE_URL"
